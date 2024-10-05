@@ -48,7 +48,7 @@ func testGetImplicitRoles(t *testing.T, e *testEngine, name string, res []string
 
 func testGetUsers(t *testing.T, e *testEngine, name string, res []string) {
 	t.Helper()
-	reply, err := e.s.GetUsersForRole(e.ctx, &pb.UserRoleRequest{EnforcerHandler: e.h, User: name})
+	reply, err := e.s.GetUsersForRole(e.ctx, &pb.UserRoleRequest{EnforcerHandler: e.h, Role: name})
 	assert.NoError(t, err)
 
 	t.Log("Users for ", name, ": ", reply.Array)
@@ -144,12 +144,12 @@ func TestRoleAPI(t *testing.T) {
 	testEnforce(t, e, "bob", "data2", "write", true)
 
 	testGetPermissions(t, e, "alice", [][]string{{"alice", "data1", "read"}}) //Added these in this class as it's part of RBAC.
-	testGetPermissions(t, e, "bob", [][]string{{"bob","data2", "write"}})
+	testGetPermissions(t, e, "bob", [][]string{{"bob", "data2", "write"}})
 	testGetPermissions(t, e, "george", [][]string{})
 	testGetPermissions(t, e, "data3_admin", [][]string{{"data3_admin", "data3", "admin"}})
 
-	testGetImplicitPermissions(t, e, "bob", [][]string{{"bob","data2", "write"}})
-	testGetImplicitPermissions(t, e, "data3_admin", [][]string{{"data3_admin", "data3", "admin"},{"data4_admin", "data4", "read"}})
+	testGetImplicitPermissions(t, e, "bob", [][]string{{"bob", "data2", "write"}})
+	testGetImplicitPermissions(t, e, "data3_admin", [][]string{{"data3_admin", "data3", "admin"}, {"data4_admin", "data4", "read"}})
 }
 
 func testGetPermissions(t *testing.T, e *testEngine, name string, res [][]string) {
@@ -238,4 +238,23 @@ func TestPermissionAPI(t *testing.T) {
 	testEnforceWithoutUsers(t, e, "alice", "write", false)
 	testEnforceWithoutUsers(t, e, "bob", "read", false)
 	testEnforceWithoutUsers(t, e, "bob", "write", false)
+}
+
+func testGetDomains(t *testing.T, e *testEngine, name string, res []string) {
+	t.Helper()
+	reply, err := e.s.GetDomains(e.ctx, &pb.UserRoleRequest{EnforcerHandler: e.h, User: name})
+	assert.NoError(t, err)
+
+	t.Log("Domains for ", name, ": ", reply.Array)
+
+	if !util.SetEquals(res, reply.Array) {
+		t.Error("Domains for ", name, ": ", reply.Array, ", supposed to be ", res)
+	}
+}
+
+func TestRoleDomainAPI(t *testing.T) {
+	e := newTestEngine(t, "file", "../examples/rbac_with_domains_policy.csv", "../examples/rbac_with_domains_model.conf")
+
+	testGetDomains(t, e, "alice", []string{"domain1"})
+	testGetDomains(t, e, "bob", []string{"domain2"})
 }

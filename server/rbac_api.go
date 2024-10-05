@@ -16,9 +16,27 @@ package server
 
 import (
 	"context"
+	"errors"
 
 	pb "github.com/casbin/casbin-server/proto"
 )
+
+// GetDomains gets the domains that a user has.
+func (s *Server) GetDomains(ctx context.Context, in *pb.UserRoleRequest) (*pb.ArrayReply, error) {
+	e, err := s.getEnforcer(int(in.EnforcerHandler))
+	if err != nil {
+		return &pb.ArrayReply{}, err
+	}
+
+	rm := e.GetModel()["g"]["g"].RM
+	if rm == nil {
+		return nil, errors.New("RoleManager is nil")
+	}
+
+	res, _ := rm.GetDomains(in.User)
+
+	return &pb.ArrayReply{Array: res}, nil
+}
 
 // GetRolesForUser gets the roles that a user has.
 func (s *Server) GetRolesForUser(ctx context.Context, in *pb.UserRoleRequest) (*pb.ArrayReply, error) {
@@ -27,12 +45,17 @@ func (s *Server) GetRolesForUser(ctx context.Context, in *pb.UserRoleRequest) (*
 		return &pb.ArrayReply{}, err
 	}
 
-	res, _ := e.GetModel()["g"]["g"].RM.GetRoles(in.User)
+	rm := e.GetModel()["g"]["g"].RM
+	if rm == nil {
+		return nil, errors.New("RoleManager is nil")
+	}
+
+	res, _ := rm.GetRoles(in.User, in.Domain...)
 
 	return &pb.ArrayReply{Array: res}, nil
 }
 
-// GetImplicitPermissionsForUser gets all permissions(including children) for a user or role.
+// GetImplicitRolesForUser gets implicit roles that a user has.
 func (s *Server) GetImplicitRolesForUser(ctx context.Context, in *pb.UserRoleRequest) (*pb.ArrayReply, error) {
 	e, err := s.getEnforcer(int(in.EnforcerHandler))
 	if err != nil {
@@ -42,14 +65,19 @@ func (s *Server) GetImplicitRolesForUser(ctx context.Context, in *pb.UserRoleReq
 	return &pb.ArrayReply{Array: res}, err
 }
 
-// GetUsersForRole gets the users that has a role.
+// GetUsersForRole gets the users that have a role.
 func (s *Server) GetUsersForRole(ctx context.Context, in *pb.UserRoleRequest) (*pb.ArrayReply, error) {
 	e, err := s.getEnforcer(int(in.EnforcerHandler))
 	if err != nil {
 		return &pb.ArrayReply{}, err
 	}
 
-	res, _ := e.GetModel()["g"]["g"].RM.GetUsers(in.Role)
+	rm := e.GetModel()["g"]["g"].RM
+	if rm == nil {
+		return nil, errors.New("RoleManager is nil")
+	}
+
+	res, _ := rm.GetUsers(in.Role)
 
 	return &pb.ArrayReply{Array: res}, nil
 }
@@ -189,7 +217,12 @@ func (s *Server) GetPermissionsForUser(ctx context.Context, in *pb.PermissionReq
 		return &pb.Array2DReply{}, err
 	}
 
-	return s.wrapPlainPolicy(e.GetFilteredPolicy(0, in.User)), nil
+	filteredPolicy, err := e.GetFilteredPolicy(0, in.User)
+	if err != nil {
+		return &pb.Array2DReply{}, err
+	}
+
+	return s.wrapPlainPolicy(filteredPolicy), nil
 }
 
 // GetImplicitPermissionsForUser gets all permissions(including children) for a user or role.
@@ -198,7 +231,7 @@ func (s *Server) GetImplicitPermissionsForUser(ctx context.Context, in *pb.Permi
 	if err != nil {
 		return &pb.Array2DReply{}, err
 	}
-	resp, err := e.GetImplicitPermissionsForUser(in.User)
+	resp, err := e.GetImplicitPermissionsForUser(in.User, in.Domain...)
 	return s.wrapPlainPolicy(resp), err
 }
 
@@ -209,7 +242,12 @@ func (s *Server) HasPermissionForUser(ctx context.Context, in *pb.PermissionRequ
 		return &pb.BoolReply{}, err
 	}
 
-	return &pb.BoolReply{Res: e.HasPolicy(s.convertPermissions(in.User, in.Permissions...)...)}, nil
+	hasPolicy, err := e.HasPolicy(s.convertPermissions(in.User, in.Permissions...)...)
+	if err != nil {
+		return &pb.BoolReply{}, err
+	}
+
+	return &pb.BoolReply{Res: hasPolicy}, nil
 }
 
 func (s *Server) convertPermissions(user string, permissions ...string) []interface{} {

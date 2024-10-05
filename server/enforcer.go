@@ -17,8 +17,9 @@ package server
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"os"
 	"strings"
+	"sync"
 
 	pb "github.com/casbin/casbin-server/proto"
 	"github.com/casbin/casbin/v2"
@@ -30,6 +31,8 @@ import (
 type Server struct {
 	enforcerMap map[int]*casbin.Enforcer
 	adapterMap  map[int]persist.Adapter
+	muE         sync.RWMutex
+	muA         sync.RWMutex
 }
 
 func NewServer() *Server {
@@ -42,28 +45,40 @@ func NewServer() *Server {
 }
 
 func (s *Server) getEnforcer(handle int) (*casbin.Enforcer, error) {
-	if _, ok := s.enforcerMap[handle]; ok {
-		return s.enforcerMap[handle], nil
+	s.muE.RLock()
+	defer s.muE.RUnlock()
+
+	if e, ok := s.enforcerMap[handle]; ok {
+		return e, nil
 	} else {
 		return nil, errors.New("enforcer not found")
 	}
 }
 
 func (s *Server) getAdapter(handle int) (persist.Adapter, error) {
-	if _, ok := s.adapterMap[handle]; ok {
-		return s.adapterMap[handle], nil
+	s.muA.RLock()
+	defer s.muA.RUnlock()
+
+	if a, ok := s.adapterMap[handle]; ok {
+		return a, nil
 	} else {
 		return nil, errors.New("adapter not found")
 	}
 }
 
 func (s *Server) addEnforcer(e *casbin.Enforcer) int {
+	s.muE.Lock()
+	defer s.muE.Unlock()
+
 	cnt := len(s.enforcerMap)
 	s.enforcerMap[cnt] = e
 	return cnt
 }
 
 func (s *Server) addAdapter(a persist.Adapter) int {
+	s.muA.Lock()
+	defer s.muA.Unlock()
+
 	cnt := len(s.adapterMap)
 	s.adapterMap[cnt] = a
 	return cnt
@@ -83,7 +98,7 @@ func (s *Server) NewEnforcer(ctx context.Context, in *pb.NewEnforcerRequest) (*p
 
 	if in.ModelText == "" {
 		cfg := LoadConfiguration(getLocalConfigPath())
-		data, err := ioutil.ReadFile(cfg.Enforcer)
+		data, err := os.ReadFile(cfg.Enforcer)
 		if err != nil {
 			return &pb.NewEnforcerReply{Handler: 0}, err
 		}
@@ -96,12 +111,7 @@ func (s *Server) NewEnforcer(ctx context.Context, in *pb.NewEnforcerRequest) (*p
 			return &pb.NewEnforcerReply{Handler: 0}, err
 		}
 
-		a, err = newAdapter(&pb.NewAdapterRequest{})
-		if err != nil {
-			return &pb.NewEnforcerReply{Handler: 0}, err
-		}
-
-		e, err = casbin.NewEnforcer(m, a)
+		e, err = casbin.NewEnforcer(m, false)
 		if err != nil {
 			return &pb.NewEnforcerReply{Handler: 0}, err
 		}
@@ -116,6 +126,9 @@ func (s *Server) NewEnforcer(ctx context.Context, in *pb.NewEnforcerRequest) (*p
 			return &pb.NewEnforcerReply{Handler: 0}, err
 		}
 	}
+
+	e.EnableAcceptJsonRequest(in.EnableAcceptJsonRequest)
+
 	h := s.addEnforcer(e)
 
 	return &pb.NewEnforcerReply{Handler: int32(h)}, nil

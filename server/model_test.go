@@ -16,7 +16,7 @@ package server
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	pb "github.com/casbin/casbin-server/proto"
@@ -54,12 +54,12 @@ func TestRBACModel(t *testing.T) {
 		t.Error(err)
 	}
 
-	modelText, err := ioutil.ReadFile("../examples/rbac_model.conf")
+	modelText, err := os.ReadFile("../examples/rbac_model.conf")
 	if err != nil {
 		t.Error(err)
 	}
 
-	resp, err := s.NewEnforcer(ctx, &pb.NewEnforcerRequest{ModelText: string(modelText), AdapterHandle: 0})
+	resp, err := s.NewEnforcer(ctx, &pb.NewEnforcerRequest{ModelText: string(modelText), AdapterHandle: 0, EnableAcceptJsonRequest: false})
 	if err != nil {
 		t.Error(err)
 	}
@@ -85,12 +85,12 @@ func TestABACModel(t *testing.T) {
 	s := NewServer()
 	ctx := context.Background()
 
-	modelText, err := ioutil.ReadFile("../examples/abac_model.conf")
+	modelText, err := os.ReadFile("../examples/abac_model.conf")
 	if err != nil {
 		t.Error(err)
 	}
 
-	resp, err := s.NewEnforcer(ctx, &pb.NewEnforcerRequest{ModelText: string(modelText), AdapterHandle: -1})
+	resp, err := s.NewEnforcer(ctx, &pb.NewEnforcerRequest{ModelText: string(modelText), AdapterHandle: -1, EnableAcceptJsonRequest: false})
 	if err != nil {
 		t.Error(err)
 	}
@@ -100,8 +100,8 @@ func TestABACModel(t *testing.T) {
 	}
 	e := resp.Handler
 
-	data1, _ := MakeABAC(ABACModel{Name:"data1",Owner:"alice"})
-	data2, _ := MakeABAC(ABACModel{Name:"data2",Owner:"bob"})
+	data1, _ := MakeABAC(ABACModel{Name: "data1", Owner: "alice"})
+	data2, _ := MakeABAC(ABACModel{Name: "data2", Owner: "bob"})
 
 	testModel(t, s, e, "alice", data1, "read", true)
 	testModel(t, s, e, "alice", data1, "write", true)
@@ -117,7 +117,7 @@ func TestABACModel(t *testing.T) {
 func testModel(t *testing.T, s *Server, enforcerHandler int32, sub string, obj string, act string, res bool) {
 	t.Helper()
 
-	reply, err := s.Enforce(nil, &pb.EnforceRequest{EnforcerHandler: enforcerHandler, Params: []string{sub, obj, act}})
+	reply, err := s.Enforce(context.TODO(), &pb.EnforceRequest{EnforcerHandler: enforcerHandler, Params: []string{sub, obj, act}})
 	assert.NoError(t, err)
 
 	if reply.Res != res {

@@ -68,6 +68,8 @@ service Casbin {
   rpc HasGroupingPolicy (PolicyRequest) returns (BoolReply) {}
   rpc HasNamedGroupingPolicy (PolicyRequest) returns (BoolReply) {}
 
+  rpc GetDomains(UserRoleRequest) returns (ArrayReply) {}
+
   rpc GetRolesForUser (UserRoleRequest) returns (ArrayReply) {}
   rpc GetImplicitRolesForUser (UserRoleRequest) returns (ArrayReply) {}
   rpc GetUsersForRole (UserRoleRequest) returns (ArrayReply) {}
@@ -91,6 +93,7 @@ service Casbin {
 message NewEnforcerRequest {
   string modelText = 1;
   int32 adapterHandle = 2;
+  bool enableAcceptJsonRequest = 3;
 }
 
 message NewEnforcerReply {
@@ -150,12 +153,14 @@ message UserRoleRequest {
   int32 enforcerHandler = 1;
   string user = 2;
   string role = 3;
+  repeated string domain =4;
 }
 
 message PermissionRequest {
   int32 enforcerHandler = 1;
   string user = 2;
   repeated string permissions = 3;
+  repeated string domain =4;
 }
 
 message Array2DReply {
